@@ -585,4 +585,97 @@ public class MainlineDevelopmentMode : TestBase
 
         fixture.AssertFullSemver("1.0.0", conventionalCommitsConfig);
     }
+
+    [Test]
+    public void VerifyIssue3644BumpsMajorBasedOnLastTagNotTheFullHistory()
+    {
+        /*
+mode: Mainline
+assembly-versioning-format: '{Major}.{Minor}.{Patch}'
+assembly-file-versioning-format: '{Major}.{Minor}.{Patch}.{WeightedPreReleaseNumber ?? 0}'
+branches:
+  master:
+    is-mainline: true
+    increment: None
+  major:
+    regex: ^major[\/-]
+    increment: Major
+    source-branches: ['master']
+  minor:
+    regex: ^minor[\/-]
+    increment: Minor
+    source-branches: ['master', 'support']
+  patch:
+    regex: ^patch[\/-]
+    increment: Patch
+    source-branches: ['master', 'support']
+  support:
+    is-mainline: true
+    regex: ^support[/-]
+    tag: ''
+    increment: None
+    source-branches: ['master']
+*/
+
+        var configuration = GitFlowConfigurationBuilder.New
+            .WithBranch(MainBranch, builder => builder
+                .WithVersioningMode(VersioningMode.Mainline)
+                .WithIncrement(IncrementStrategy.None)
+                .WithIsMainline(true))
+            .WithBranch("major", builder => builder
+                .WithRegularExpression("^major[\\/-]")
+                .WithIncrement(IncrementStrategy.Major)
+                .WithSourceBranches(MainBranch))
+            .WithBranch("minor", builder => builder
+                .WithRegularExpression("^minor[\\/-]")
+                .WithIncrement(IncrementStrategy.Minor)
+                .WithSourceBranches(MainBranch))
+            .WithBranch("patch", builder => builder
+                .WithRegularExpression("^patch[\\/-]")
+                .WithIncrement(IncrementStrategy.Patch)
+                .WithSourceBranches(MainBranch))
+            .WithBranch("support", builder => builder
+                .WithVersioningMode(VersioningMode.Mainline)
+                .WithIncrement(IncrementStrategy.None)
+                .WithRegularExpression("^support[\\/-]")
+                .WithIsMainline(true)
+                .WithSourceBranches(MainBranch))
+            .Build();
+
+        // implement history from the issue
+        using var fixture = new EmptyRepositoryFixture();
+        fixture.MakeACommit("First");
+        fixture.MakeACommit("New file added");
+        fixture.ApplyTag("v1.0.0");
+        fixture.MakeACommit("Merged PR 123: new feature");
+        fixture.ApplyTag("v2.0.2");
+
+        // three branches, three merges to main
+        fixture.BranchTo("minor/new-feature-1");
+        fixture.MakeACommit("New class added");
+        fixture.Checkout(MainBranch);
+        fixture.MergeNoFF("minor/new-feature-1");
+
+        fixture.BranchTo("minor/new-feature-2");
+        fixture.MakeACommit("New class added");
+        fixture.Checkout(MainBranch);
+        fixture.MergeNoFF("minor/new-feature-2");
+
+        fixture.BranchTo("minor/new-feature-3");
+        fixture.MakeACommit("New class added");
+        fixture.Checkout(MainBranch);
+        fixture.MergeNoFF("minor/new-feature-3");
+
+        fixture.ApplyTag("v2.1.0");
+
+        // minor branch squashed
+        fixture.MakeACommit("Merged PR 127: squashed feature");
+        fixture.ApplyTag("v2.6.0");
+
+        // let's implement a breaking change
+        fixture.BranchTo("major/breaking-change");
+        fixture.MakeACommit("Breaking change implemented");
+
+        fixture.AssertFullSemver("3.0.0-breaking-change.1", configuration);
+    }
 }

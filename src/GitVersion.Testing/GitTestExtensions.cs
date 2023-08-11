@@ -11,7 +11,8 @@ public static class GitTestExtensions
 
     public static void MergeNoFF(this IRepository repository, string branch) => MergeNoFF(repository, branch, Generate.SignatureNow());
 
-    public static void MergeNoFF(this IRepository repository, string branch, Signature sig) => repository.Merge(repository.Branches[branch], sig, new MergeOptions
+    public static void MergeNoFF(this IRepository repository, string branch, Signature sig) =>
+        repository.Merge(repository.Branches[branch], sig, new MergeOptions
     {
         FastForwardStrategy = FastForwardStrategy.NoFastForward
     });
